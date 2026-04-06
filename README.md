@@ -39,7 +39,7 @@ The system visualizes:
 
 ### 📷 Sample Outputs
 ![Time Domain](images/time_domain.png)  
-![Frequency Spectrum](images/frequency.png)
+![Frequency Spectrum](images/freq_domain.png)
 
 ---
 
