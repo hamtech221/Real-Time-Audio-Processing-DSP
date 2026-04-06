@@ -1,0 +1,135 @@
+% Real-Time and Offline Audio Processing in MATLAB
+% Requires MATLAB Audio Toolbox and Signal Processing Toolbox
+
+
+function realTimeAudioProcessing()
+
+    % Setup audio device reader and writer
+    deviceReader = audioDeviceReader('SampleRate', 44100, 'SamplesPerFrame', 1024);
+    deviceWriter = audioDeviceWriter('SampleRate', 44100);
+
+    % design filters
+    Fs = 44100; % sampling frequency defined as here
+
+    lpFilt = designfilt('lowpassiir', ...
+        'FilterOrder', 8, ...
+        'HalfPowerFrequency', 3000, ...
+        'SampleRate', Fs);
+
+    hpFilt = designfilt('highpassiir', ...
+        'FilterOrder', 8, ...
+        'HalfPowerFrequency', 500, ...
+        'SampleRate', Fs);
+
+    disp('Processing live audio. Press Ctrl+C to stop.');
+
+    % real-time processing loop
+    while true
+        audioIn = deviceReader(); % capture audio from microphone
+
+        lowPassed = filter(lpFilt, audioIn);   
+        highPassed = filter(hpFilt, audioIn); 
+
+       
+        audioOut = lowPassed + highPassed;
+
+        % Play processed audio
+        deviceWriter(audioOut);
+    end
+
+   
+    release(deviceReader);
+    release(deviceWriter);
+
+end
+
+
+function offlineAudioAnalysis(audioFile)
+
+    % Load audio signal
+    [audio, Fs] = audioread(audioFile);
+    audio = audio(:,1); % use single channel if stereo
+
+    t = (0:length(audio)-1) / Fs;
+
+    % down sample the signal
+    downFactor = 4;
+    downSampled = audio(1:downFactor:end);
+    t_down = t(1:downFactor:end);
+
+    % reconstruct using sinc interpolation
+    reconstructed = sincInterp(downSampled, t_down, t);
+
+    
+    figure;
+    subplot(3,1,1);
+    plot(t, audio);
+    title('Original Signal');
+    xlabel('Time (s)');
+    ylabel('Amplitude');
+
+    subplot(3,1,2);
+    stem(t_down, downSampled, 'r');
+    title('Down-Sampled Signal');
+    xlabel('Time (s)');
+    ylabel('Amplitude');
+
+    subplot(3,1,3);
+    plot(t, reconstructed, 'g');
+    title('Reconstructed Signal');
+    xlabel('Time (s)');
+    ylabel('Amplitude');
+
+    % frequency domain analysis
+    N = length(audio);
+    freq = linspace(0, Fs, N);
+    freq_down = linspace(0, Fs/downFactor, length(downSampled));
+
+    % fft
+    AudioFFT = abs(fft(audio) / N);
+    AudioDownFFT = abs(fft(downSampled) / length(downSampled));
+
+    % plot frequency spectrum
+    figure;
+
+    subplot(2,1,1);
+    plot(freq, 20*log10(AudioFFT));
+    title('Original Signal Spectrum');
+    xlabel('Frequency (Hz)');
+    ylabel('Magnitude (dB)');
+
+    subplot(2,1,2);
+    plot(freq_down, 20*log10(AudioDownFFT));
+    title('Down-Sampled Signal Spectrum');
+    xlabel('Frequency (Hz)');
+    ylabel('Magnitude (dB)');
+
+end
+
+% sinc interpolation function
+function y = sincInterp(x, t_sampled, t_original)
+
+    T = mean(diff(t_sampled)); % Sampling period
+    y = zeros(size(t_original));
+
+    for i = 1:length(t_sampled)
+        y = y + x(i) * sinc((t_original - t_sampled(i)) / T);
+    end
+
+end
+
+
+
+% choose either real-time or offline processing
+mode = 'offline'; % 'realtime' or 'offline'
+
+if strcmp(mode, 'realtime')
+    realTimeAudioProcessing();
+
+elseif strcmp(mode, 'offline')
+    audioFile = 'voice.wav'; 
+    offlineAudioAnalysis(audioFile);
+
+else
+    disp('Invalid mode. Choose "realtime" or "offline".');
+end
